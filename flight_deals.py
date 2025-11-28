@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-REAL WEEKEND FLIGHT FINDER
-OTP → ANYWHERE (Roundtrip)
-No API keys. No fake data. Google Flights scraped + parsed.
-"""
 
 import os
 import re
@@ -11,10 +6,6 @@ import json
 import datetime
 import requests
 from datetime import timedelta
-
-# ============================================
-# CONFIG
-# ============================================
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -27,9 +18,6 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9"
 }
 
-# ============================================
-# WEEKEND CALCULATOR
-# ============================================
 
 def next_weekend():
     today = datetime.date.today()
@@ -38,80 +26,72 @@ def next_weekend():
     return saturday, monday
 
 
-# ============================================
-# GOOGLE FLIGHTS SCRAPER (REAL DATA)
-# ============================================
-
 def scrape_google_flights(origin, depart, ret):
     """
-    We load Google Flights search HTML → extract embedded JSON → find prices.
-    Google puts all prices inside AF_initDataCallback JSON blobs.
-    Parsing those gives real prices without JS.
+    Safely scrape Google Flights JSON blobs for real prices.
+    No f-strings spanning lines (avoid syntax issues).
     """
 
-    url = (
-        "https://www.google.com/travel/flights/search?"
-        f"hl=en&gl=us&curr=EUR&tfs=CBwQAhoragwIAhIIL20vMDRocBID{origin}cg0IAhIIL20vMGp4djISA0FOWXIMCAkSA0FOWXIaIxIGc2RhdGUo{depart}),"
-        f"EgZzZGF0ZSg{return})"
+    base_url = "https://www.google.com/travel/flights/search?"
+    query = (
+        "hl=en&gl=us&curr=EUR&"
+        "tfs=CBwQAholagwIAhIIL20vMDRocBID"
+        + origin +
+        "cgcIARID" +
+        origin +
+        "SgwIARISC21vdW50YWluIGRhdGUaIhIGc2RhdGUo"
+        + depart +
+        "),EgZzZGF0ZSg("
+        + ret +
+        "))"
     )
+
+    url = base_url + query
 
     r = requests.get(url, headers=HEADERS)
     html = r.text
 
-    # Extract JSON payload(s)
     matches = re.findall(r"AF_initDataCallback\((.*?)\);", html, re.DOTALL)
     prices = []
 
-    for m in matches:
+    for block in matches:
         try:
-            j = json.loads(m)
+            j = json.loads(block)
         except:
             continue
 
         if "data" not in j:
             continue
 
-        # Convert nested data to string to find EUR prices
         raw = json.dumps(j["data"])
-
-        # Google writes "123\u20ac"
         found = re.findall(r"(\d{1,4})\\u20ac", raw)
 
         for p in found:
-            p = int(p)
-            if p <= MAX_PRICE:
-                prices.append(p)
+            num = int(p)
+            if num <= MAX_PRICE:
+                prices.append(num)
 
-    prices = sorted(set(prices))
-    return prices
+    return sorted(set(prices))
 
-
-# ============================================
-# TELEGRAM
-# ============================================
 
 def send_telegram(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram not configured")
+        print("Telegram not configured.")
         print(text)
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-
-    requests.post(url, json={
+    payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True
-    })
+    }
+    requests.post(url, json=payload)
 
-
-# ============================================
-# MAIN
-# ============================================
 
 def main():
-    print("🔍 Pulling real flight data...")
+    print("Scanning real flight prices...")
 
     sat, mon = next_weekend()
     depart = sat.strftime("%Y-%m-%d")
@@ -120,32 +100,27 @@ def main():
     prices = scrape_google_flights(ORIGIN, depart, ret)
 
     if not prices:
-        msg = (
+        text = (
             "😔 <b>Keine Flüge gefunden</b>\n"
             f"{depart} → {ret}\n"
             f"Unter {MAX_PRICE}€."
         )
-        send_telegram(msg)
+        send_telegram(text)
         return
 
-    msg = (
-        f"✈️ <b>TOP 10 BILLIGSTE FLÜGE (Real Prices)</b>\n"
+    text = (
+        f"✈️ <b>TOP 10 BILLIGSTE REAL FLÜGE</b>\n"
         f"Ab: <b>{ORIGIN}</b>\n"
         f"Weekend: {depart} → {ret}\n"
         f"Max: {MAX_PRICE}€\n\n"
     )
 
     for p in prices[:10]:
-        msg += f"• <b>{p} €</b>\n"
+        text += f"• <b>{p} €</b>\n"
 
-    msg += (
+    text += (
         "\n<a href='https://www.google.com/travel/flights?"
-        f"q=flights+from+{ORIGIN}'>Google Flights öffnen</a>"
+        "q=flights+from+OTP'>Google Flights öffnen</a>"
     )
 
-    send_telegram(msg)
-    print(msg)
-
-
-if __name__ == "__main__":
-    main()
+    send_teleg_
